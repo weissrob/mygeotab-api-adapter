@@ -12,6 +12,7 @@
 -- delete from public."ExceptionEvents";
 -- delete from public."FailedDVIRDefectUpdates";
 -- delete from public."FaultData";
+-- delete from public."Groups";
 -- delete from public."LogRecords";
 -- delete from public."MyGeotabVersionInfo";
 -- delete from public."Rules";
@@ -33,6 +34,7 @@
 -- ALTER SEQUENCE public."ExceptionEvents_id_seq" RESTART;
 -- ALTER SEQUENCE public."FailedDVIRDefectUpdates_id_seq" RESTART;
 -- ALTER SEQUENCE public."FaultData_id_seq" RESTART;
+-- ALTER SEQUENCE public."Groups_id_seq" RESTART;
 -- ALTER SEQUENCE public."LogRecords_id_seq" RESTART;
 -- ALTER SEQUENCE public."Rules_id_seq" RESTART;
 -- ALTER SEQUENCE public."StatusData_id_seq" RESTART;
@@ -67,6 +69,8 @@ union all
 select 'FailedDVIRDefectUpdates', count(0) from public."FailedDVIRDefectUpdates"
 union all
 select 'FaultData', count(0) from public."FaultData"
+union all
+select 'Groups', count(0) from public."Groups"
 union all
 select 'LogRecords', count(0) from public."LogRecords"
 union all

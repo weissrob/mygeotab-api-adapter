@@ -43,6 +43,43 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
+-- Name: Groups; Type: TABLE; Schema: public; Owner: geotabadapter_owner
+--
+
+CREATE TABLE public."Groups" (
+    id bigint NOT NULL,
+    "GeotabId" character varying(50) NOT NULL,
+    "ParentId" character varying(50),
+    "Name" character varying(50) NOT NULL,
+    "Color" character varying(50),
+    "Comments" character varying(100),
+    "Reference" character varying(255),
+    "RecordLastChangedUtc" timestamp without time zone NOT NULL
+);
+
+ALTER TABLE public."Groups" OWNER TO geotabadapter_owner;
+
+--
+-- Name: Groups_id_seq; Type: SEQUENCE; Schema: public; Owner: geotabadapter_owner
+--
+
+CREATE SEQUENCE public."Groups_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+ALTER TABLE public."Groups_id_seq" OWNER TO geotabadapter_owner;
+
+--
+-- Name: Groups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: geotabadapter_owner
+--
+
+ALTER SEQUENCE public."Groups_id_seq" OWNED BY public."Groups".id;
+
+
+--
 -- Name: Conditions; Type: TABLE; Schema: public; Owner: geotabadapter_owner
 --
 

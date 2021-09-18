@@ -1130,6 +1130,11 @@ ALTER TABLE ONLY public."LogRecords" ALTER COLUMN id SET DEFAULT nextval('public
 
 ALTER TABLE ONLY public."OVDSServerCommands" ALTER COLUMN id SET DEFAULT nextval('public."OVDSServerCommands_id_seq"'::regclass);
 
+--
+-- Name: Groups id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+--
+
+ALTER TABLE ONLY public."Groups" ALTER COLUMN id SET DEFAULT nextval('public."Groups_id_seq"'::regclass);
 
 --
 -- Name: Rules id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
@@ -1267,6 +1272,14 @@ ALTER TABLE ONLY public."ExceptionEvents"
 
 ALTER TABLE ONLY public."FaultData"
     ADD CONSTRAINT "FaultData_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Groups Groups_pkey; Type: CONSTRAINT; Schema: public; Owner: geotabadapter_owner
+--
+
+ALTER TABLE ONLY public."Groups"
+    ADD CONSTRAINT "Groups_pkey" PRIMARY KEY (id);
 
 
 --
@@ -1507,6 +1520,20 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."FaultData" TO geotabadapter_c
 --
 
 GRANT ALL ON SEQUENCE public."FaultData_id_seq" TO geotabadapter_client;
+
+
+--
+-- Name: TABLE "Groups"; Type: ACL; Schema: public; Owner: geotabadapter_owner
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public."Groups" TO geotabadapter_client;
+
+
+--
+-- Name: SEQUENCE "Groups_id_seq"; Type: ACL; Schema: public; Owner: geotabadapter_owner
+--
+
+GRANT ALL ON SEQUENCE public."Groups_id_seq" TO geotabadapter_client;
 
 
 --

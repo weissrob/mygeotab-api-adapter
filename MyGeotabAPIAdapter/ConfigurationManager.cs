@@ -141,6 +141,7 @@ namespace MyGeotabAPIAdapter
         const string TableNameDbExceptionEvent = "ExceptionEvents";
         const string TableNameDbFailedDVIRDefectUpdates = "FailedDVIRDefectUpdates";
         const string TableNameDbFaultData = "FaultData";
+        const string TableNameDbGroup = "Groups";
         const string TableNameDbLogRecord = "LogRecords";
         const string TableNameDbRule = "Rules";
         const string TableNameDbStatusData = "StatusData";
@@ -396,6 +397,14 @@ namespace MyGeotabAPIAdapter
         public static string DbFaultDataTableName
         {
             get => TableNameDbFaultData;
+        }
+
+        /// <summary>
+        /// The name of the database table for <see cref="Group"/> information.
+        /// </summary>
+        public static string DbGroupTableName
+        {
+            get => TableNameDbGroup;
         }
 
         /// <summary>

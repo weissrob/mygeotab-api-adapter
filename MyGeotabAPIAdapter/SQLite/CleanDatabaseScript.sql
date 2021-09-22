@@ -12,6 +12,7 @@
 --delete from "ExceptionEvents";
 --delete from "FailedDVIRDefectUpdates";
 --delete from "FaultData";
+--delete from "Groups";
 --delete from "LogRecords";
 --delete from "MyGeotabVersionInfo";
 --delete from "Rules";
@@ -47,6 +48,8 @@ union all
 select 'FailedDVIRDefectUpdates', count(0) from "FailedDVIRDefectUpdates"
 union all
 select 'FaultData', count(0) from "FaultData"
+union all
+select 'Groups', count(0) from "Groups"
 union all
 select 'LogRecords', count(0) from "LogRecords"
 union all

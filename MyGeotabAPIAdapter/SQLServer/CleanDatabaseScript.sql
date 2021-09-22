@@ -12,6 +12,7 @@
 -- delete from [dbo].[ExceptionEvents];
 -- delete from [dbo].[FailedDVIRDefectUpdates];
 -- delete from [dbo].[FaultData];
+-- delete from [dbo].[Groups];
 -- delete from [dbo].[LogRecords];
 -- delete from [dbo].[MyGeotabVersionInfo];
 -- delete from [dbo].[Rules];
@@ -33,6 +34,7 @@
 --DBCC CHECKIDENT ('dbo.ExceptionEvents', RESEED, 0);
 --DBCC CHECKIDENT ('dbo.FailedDVIRDefectUpdates', RESEED, 0);
 --DBCC CHECKIDENT ('dbo.FaultData', RESEED, 0);
+--DBCC CHECKIDENT ('dbo.Groups', RESEED, 0);
 --DBCC CHECKIDENT ('dbo.LogRecords', RESEED, 0);
 --DBCC CHECKIDENT ('dbo.Rules', RESEED, 0);
 --DBCC CHECKIDENT ('dbo.StatusData', RESEED, 0);
@@ -68,6 +70,8 @@ union all
 select 'FailedDVIRDefectUpdates', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'FailedDVIRDefectUpdates'
 union all
 select 'FaultData', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'FaultData'
+union all
+select 'Groups', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'Groups'
 union all
 select 'LogRecords', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'LogRecords'
 union all

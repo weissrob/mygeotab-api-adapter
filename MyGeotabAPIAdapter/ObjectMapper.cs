@@ -102,6 +102,30 @@ namespace MyGeotabAPIAdapter
         }
 
         /// <summary>
+        /// Indicates whether the <see cref="DbGroup"/> differs from the <see cref="Group"/>, thereby requiring the <see cref="DbGroup"/> to be updated in the database. 
+        /// </summary>
+        /// <param name="dbGroup">The <see cref="DbGroup"/> to be evaluated.</param>
+        /// <param name="group">The <see cref="Group"/> to compare against.</param>
+        /// <returns></returns>
+        public static bool DbGroupRequiresUpdate(DbGroup dbGroup, Group group)
+        {
+            if (dbGroup.GeotabId != group.Id.ToString())
+            {
+                throw new ArgumentException($"Cannot compare Group '{group.Id}' with DbGroup '{dbGroup.GeotabId}' because the IDs do not match.");
+            }
+
+            if ((dbGroup.Comments != group.Comments) && (dbGroup.Comments != null && group.Comments != ""))
+            {
+                return true;
+            }
+            if ((dbGroup.Name != group.Name) && (dbGroup.Name != null && group.Name != ""))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Indicates whether the <see cref="DbRule"/> of the <see cref="DbRuleObject"/> differs from the <see cref="Rule"/>, 
         /// thereby requiring the <see cref="DbRule"/> and related <see cref="DbCondition"/> objects to be updated in the database. 
         /// </summary>
@@ -899,6 +923,44 @@ namespace MyGeotabAPIAdapter
                 dbFaultDatas.Add(dbFaultData);
             }
             return dbFaultDatas;
+        }
+
+        /// <summary>
+        /// Converts the supplied <see cref="Group"/> into a <see cref="DbGroup"/>.
+        /// </summary>
+        /// <param name="">The <see cref="Group"/> to be converted.</param>
+        /// <returns></returns>
+        public static DbGroup GetDbGroup(Group group)
+        {
+            DbGroup dbGroup = new()
+            {
+                GeotabId = group.Id.ToString(),
+                Name = group.Name,
+                Comments = group.Comments,
+                Reference = group.Reference,
+                //ParentId = group.ParentId,
+                //Color = group.Color,
+                //RecordLastChangedUtc = group.RecordLastChangedUtc
+            };
+            return dbGroup;
+        }
+
+        /// <summary>
+        /// Converts the supplied list of <see cref="Group"/> objects into a list of <see cref="DbGroup"/> objects.
+        /// </summary>
+        /// <param name="groups">The list of <see cref="Group"/> objects to be converted.</param>
+        /// <returns></returns>
+        public static List<DbGroup> GetDbGroups(List<Group> groups)
+        {
+            DateTime RecordLastChangedUtc = DateTime.UtcNow;
+            var dbGroups = new List<DbGroup>();
+            foreach (var group in groups)
+            {
+                DbGroup dbGroup = GetDbGroup(group);
+                dbGroup.RecordLastChangedUtc = RecordLastChangedUtc;
+                dbGroups.Add(dbGroup);
+            }
+            return dbGroups;
         }
 
         /// <summary>

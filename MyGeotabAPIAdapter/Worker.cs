@@ -37,6 +37,7 @@ namespace MyGeotabAPIAdapter
         IDictionary<Id, DbDiagnostic> dbDiagnosticsDictionary;
         IDictionary<Id, DbDVIRDefect> dbDVIRDefectsDictionary;
         IDictionary<Id, DbDVIRDefectRemark> dbDVIRDefectRemarksDictionary;
+        IDictionary<Id, DbGroup> dbGroupsDictionary;
         IDictionary<Id, DbRuleObject> dbRuleObjectDictionary;
         IDictionary<Id, DbUser> dbUsersDictionary;
         IDictionary<Id, DbZone> dbZonesDictionary;
@@ -682,6 +683,7 @@ namespace MyGeotabAPIAdapter
                     var getAllDbUsersTask = DbUserService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
                     var getAllDbDVIRDefectsTask = DbDVIRDefectService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
                     var getAllDbDVIRDefectRemarksTask = DbDVIRDefectRemarkService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                    var getAllDbGroupsTask = DbGroupService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
                     var getAllDbRuleObjectsTask = RuleHelper.GetDatabaseRuleObjectsAsync(cancellationTokenSource);
                     var getAllDbZonesTask = DbZoneService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
                     var getAllDbZoneTypesTask = DbZoneTypeService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
@@ -696,6 +698,7 @@ namespace MyGeotabAPIAdapter
                     dbUsersDictionary = getAllDbUsersTask.Result.ToDictionary(user => Id.Create(user.GeotabId));
                     dbDVIRDefectsDictionary = getAllDbDVIRDefectsTask.Result.ToDictionary(dvirDefect => Id.Create(dvirDefect.GeotabId));
                     dbDVIRDefectRemarksDictionary = getAllDbDVIRDefectRemarksTask.Result.ToDictionary(dvirDefectRemark => Id.Create(dvirDefectRemark.GeotabId));
+                    dbGroupsDictionary = getAllDbGroupsTask.Result.ToDictionary(dbGroup => Id.Create(dbGroup.GeotabId));
                     dbRuleObjectDictionary = getAllDbRuleObjectsTask.Result.ToDictionary(dbRuleObject => Id.Create(dbRuleObject.GeotabId));
                     dbZonesDictionary = getAllDbZonesTask.Result.ToDictionary(dbZone => Id.Create(dbZone.GeotabId));
                     dbZoneTypesDictionary = getAllDbZoneTypesTask.Result.ToDictionary(dbZoneType => Id.Create(dbZoneType.GeotabId));
@@ -1528,6 +1531,128 @@ namespace MyGeotabAPIAdapter
             else
             {
                 logger.Debug($"Diagnostic cache in database is up-to-date.");
+            }
+
+            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+        }
+
+        /// <summary>
+        /// Propagates <see cref="Group"/> information received from MyGeotab to the database - inserting new records, updating existing records (if the values of any of the utilized fields have changed), and marking as deleted any database group records that no longer exist in MyGeotab (based on matching on ID). 
+        /// </summary>
+        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
+        /// <returns></returns>
+        async Task PropagateGroupCacheUpdatesToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
+        {
+            MethodBase methodBase = MethodBase.GetCurrentMethod();
+            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
+
+            CancellationToken cancellationToken = cancellationTokenSource.Token;
+
+            // Only propagate the cache to database if the cache has been updated since the last time it was propagated to database.
+            if (CacheManager.GroupCacheContainer.LastUpdatedTimeUtc > CacheManager.GroupCacheContainer.LastPropagatedToDatabaseTimeUtc)
+            {
+                DateTime recordChangedTimestampUtc = DateTime.UtcNow;
+                var dbGroupsToInsert = new List<DbGroup>();
+                var dbGroupsToUpdate = new List<DbGroup>();
+
+                // Get cached groups.
+                var groupCache = (Dictionary<Id, Group>)CacheManager.GroupCacheContainer.Cache;
+
+                // Find any groups that have been deleted in MyGeotab but exist in the database and have not yet been flagged as deleted. Update them so that they will be flagged as deleted in the database.
+                if (dbGroupsDictionary.Any())
+                {
+                    foreach (DbGroup dbGroup in dbGroupsDictionary.Values.ToList())
+                    {
+                        if (dbGroup.EntityStatus == (int)Common.DatabaseRecordStatus.Active)
+                        {
+                            bool groupExistsInCache = groupCache.ContainsKey(Id.Create(dbGroup.GeotabId));
+                            if (!groupExistsInCache)
+                            {
+                                logger.Debug($"Group '{dbGroup.GeotabId}' no longer exists in MyGeotab and is being marked as deleted.");
+                                dbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Deleted;
+                                dbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
+                                dbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
+                                dbGroupsDictionary[Id.Create(dbGroup.GeotabId)] = dbGroup;
+                                dbGroupsToUpdate.Add(dbGroup);
+                            }
+                        }
+                    }
+                }
+
+                // Iterate through cached groups.
+                foreach (Group cachedGroup in groupCache.Values.ToList())
+                {
+                    // Try to find the existing database record for the cached group.
+                    if (dbGroupsDictionary.TryGetValue(cachedGroup.Id, out var existingDbGroup))
+                    {
+                        // The group has already been added to the database.
+                        bool dbGroupRequiresUpdate = ObjectMapper.DbGroupRequiresUpdate(existingDbGroup, cachedGroup);
+                        if (dbGroupRequiresUpdate)
+                        {
+                            DbGroup updatedDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
+                            updatedDbGroup.id = existingDbGroup.id;
+                            updatedDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
+                            updatedDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
+                            updatedDbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
+                            dbGroupsDictionary[Id.Create(updatedDbGroup.GeotabId)] = updatedDbGroup;
+                            dbGroupsToUpdate.Add(updatedDbGroup);
+                        }
+                    }
+                    else
+                    {
+                        // The group has not yet been added to the database. Create a DbGroup, set its properties and add it to the cache.
+                        DbGroup newDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
+                        newDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
+                        newDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
+                        newDbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Insert;
+                        dbGroupsDictionary.Add(Id.Create(newDbGroup.GeotabId), newDbGroup);
+                        dbGroupsToInsert.Add(newDbGroup);
+
+                    }
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Send any inserts to the database.
+                if (dbGroupsToInsert.Any())
+                {
+                    try
+                    {
+                        DateTime startTimeUTC = DateTime.UtcNow;
+                        long groupEntitiesInserted = await DbGroupService.InsertAsync(connectionInfo, dbGroupsToInsert, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
+                        double recordsProcessedPerSecond = (double)groupEntitiesInserted / (double)elapsedTime.TotalSeconds;
+                        logger.Info($"Completed insertion of {groupEntitiesInserted} records into {ConfigurationManager.DbGroupTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
+                    }
+                    catch (Exception)
+                    {
+                        cancellationTokenSource.Cancel();
+                        throw;
+                    }
+                }
+
+                // Send any updates/deletes to the database.
+                if (dbGroupsToUpdate.Any())
+                {
+                    try
+                    {
+                        DateTime startTimeUTC = DateTime.UtcNow;
+                        long groupEntitiesUpdated = await DbGroupService.UpdateAsync(connectionInfo, dbGroupsToUpdate, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
+                        double recordsProcessedPerSecond = (double)groupEntitiesUpdated / (double)elapsedTime.TotalSeconds;
+                        logger.Info($"Completed updating of {groupEntitiesUpdated} records in {ConfigurationManager.DbGroupTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
+                    }
+                    catch (Exception)
+                    {
+                        cancellationTokenSource.Cancel();
+                        throw;
+                    }
+                }
+                CacheManager.GroupCacheContainer.LastPropagatedToDatabaseTimeUtc = DateTime.UtcNow;
+            }
+            else
+            {
+                logger.Debug($"Group cache in database is up-to-date.");
             }
 
             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");

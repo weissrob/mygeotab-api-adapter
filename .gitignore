@@ -2,6 +2,7 @@
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
+/MyGeotabAPIAdapter/mono_crash.*
 /MyGeotabAPIAdapter/appsettings.json
 /MyGeotabAPIAdapter/appsettings.Publish.json
 /MyGeotab API Adapter/bin/Debug/netcoreapp3.1

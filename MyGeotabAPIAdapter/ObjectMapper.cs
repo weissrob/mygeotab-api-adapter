@@ -938,9 +938,8 @@ namespace MyGeotabAPIAdapter
                 Name = group.Name,
                 Comments = group.Comments,
                 Reference = group.Reference,
-                //ParentId = group.ParentId,
-                //Color = group.Color,
-                //RecordLastChangedUtc = group.RecordLastChangedUtc
+                ParentId = "", //group.ParentId,
+                Color = "", //group.Color,
             };
             return dbGroup;
         }

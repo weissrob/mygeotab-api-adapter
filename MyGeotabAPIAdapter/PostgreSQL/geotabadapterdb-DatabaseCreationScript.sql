@@ -609,11 +609,13 @@ ALTER SEQUENCE public."FaultData_id_seq" OWNED BY public."FaultData".id;
 CREATE TABLE public."Groups" (
     id bigint NOT NULL,
     "GeotabId" character varying(50) NOT NULL,
-    "ParentId" character varying(50),
-    "Name" character varying(50) NOT NULL,
-    "Color" character varying(50),
-    "Comments" character varying(255),
+    "Name" character varying(255) NOT NULL,
+    "ParentId" text,
+    "Children" text,
+    "Color" text,
+    "Comments" text,
     "Reference" character varying(255),
+    "EntityStatus" integer NOT NULL,
     "RecordLastChangedUtc" timestamp without time zone NOT NULL
 );
 
@@ -1116,6 +1118,12 @@ ALTER TABLE ONLY public."FailedDVIRDefectUpdates" ALTER COLUMN id SET DEFAULT ne
 
 ALTER TABLE ONLY public."FaultData" ALTER COLUMN id SET DEFAULT nextval('public."FaultData_id_seq"'::regclass);
 
+--
+-- Name: Groups id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+--
+
+ALTER TABLE ONLY public."Groups" ALTER COLUMN id SET DEFAULT nextval('public."Groups_id_seq"'::regclass);
+
 
 --
 -- Name: LogRecords id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
@@ -1130,11 +1138,6 @@ ALTER TABLE ONLY public."LogRecords" ALTER COLUMN id SET DEFAULT nextval('public
 
 ALTER TABLE ONLY public."OVDSServerCommands" ALTER COLUMN id SET DEFAULT nextval('public."OVDSServerCommands_id_seq"'::regclass);
 
---
--- Name: Groups id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
---
-
-ALTER TABLE ONLY public."Groups" ALTER COLUMN id SET DEFAULT nextval('public."Groups_id_seq"'::regclass);
 
 --
 -- Name: Rules id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner

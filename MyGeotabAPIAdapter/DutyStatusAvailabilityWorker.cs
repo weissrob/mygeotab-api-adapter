@@ -175,6 +175,7 @@ namespace MyGeotabAPIAdapter
                                             }
                                             catch (Exception)
                                             {
+                                                logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
                                                 cancellationTokenSource.Cancel();
                                                 throw;
                                             }
@@ -193,6 +194,7 @@ namespace MyGeotabAPIAdapter
                                             }
                                             catch (Exception)
                                             {
+                                                logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
                                                 cancellationTokenSource.Cancel();
                                                 throw;
                                             }

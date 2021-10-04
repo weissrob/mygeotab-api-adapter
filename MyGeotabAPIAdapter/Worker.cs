@@ -1568,7 +1568,7 @@ namespace MyGeotabAPIAdapter
                             bool groupExistsInCache = groupCache.ContainsKey(Id.Create(dbGroup.GeotabId));
                             if (!groupExistsInCache)
                             {
-                                logger.Debug($"Group '{dbGroup.GeotabId}' no longer exists in MyGeotab and is being marked as deleted.");
+                                logger.Info($"Group '{dbGroup.GeotabId}' no longer exists in MyGeotab and is being marked as deleted.");
                                 dbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Deleted;
                                 dbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
                                 dbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
@@ -1577,6 +1577,10 @@ namespace MyGeotabAPIAdapter
                             }
                         }
                     }
+                }
+                else
+                {
+                    logger.Info($"Group cache in database requires no deletes.");
                 }
 
                 // Iterate through cached groups.
@@ -1589,6 +1593,7 @@ namespace MyGeotabAPIAdapter
                         bool dbGroupRequiresUpdate = ObjectMapper.DbGroupRequiresUpdate(existingDbGroup, cachedGroup);
                         if (dbGroupRequiresUpdate)
                         {
+                            //logger.Info($"Updating Group '{cachedGroup.Name}' in the database.");
                             DbGroup updatedDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
                             updatedDbGroup.id = existingDbGroup.id;
                             updatedDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
@@ -1597,10 +1602,17 @@ namespace MyGeotabAPIAdapter
                             dbGroupsDictionary[Id.Create(updatedDbGroup.GeotabId)] = updatedDbGroup;
                             dbGroupsToUpdate.Add(updatedDbGroup);
                         }
+                        /*
+                        else
+                        {
+                            logger.Info($"Group cache has not been added to the database.");
+                        }
+                        */
                     }
                     else
                     {
                         // The group has not yet been added to the database. Create a DbGroup, set its properties and add it to the cache.
+                        logger.Info($"Marking Group '{cachedGroup.Name}' to be added to the database.");
                         DbGroup newDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
                         newDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
                         newDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
@@ -1626,6 +1638,7 @@ namespace MyGeotabAPIAdapter
                     }
                     catch (Exception)
                     {
+                        logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbGroupTableName} table.");
                         cancellationTokenSource.Cancel();
                         throw;
                     }
@@ -1644,6 +1657,7 @@ namespace MyGeotabAPIAdapter
                     }
                     catch (Exception)
                     {
+                        logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
                         cancellationTokenSource.Cancel();
                         throw;
                     }
@@ -1652,7 +1666,7 @@ namespace MyGeotabAPIAdapter
             }
             else
             {
-                logger.Debug($"Group cache in database is up-to-date.");
+                logger.Info($"Group cache in database is up-to-date.");
             }
 
             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
@@ -2289,6 +2303,7 @@ namespace MyGeotabAPIAdapter
                 {
                     var updateUserCacheAndPersistToDatabaseAsyncTask = UpdateUserCacheAndPersistToDatabaseAsync(cancellationTokenSource);
                     var updateDeviceCacheAndPersistToDatabaseAsyncTask = UpdateDeviceCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                    var updateGroupCacheAndPersistToDatabaseAsyncTask = UpdateGroupCacheAndPersistToDatabaseAsync(cancellationTokenSource);
                     var updateZoneTypeCacheAndPersistToDatabaseAsyncTask = UpdateZoneTypeCacheAndPersistToDatabaseAsync(cancellationTokenSource);
                     var updateZoneCacheAndPersistToDatabaseAsyncTask = UpdateZoneCacheAndPersistToDatabaseAsync(cancellationTokenSource);
                     var updateDiagnosticCacheAndPersistToDatabaseAsyncTask = UpdateDiagnosticCacheAndPersistToDatabaseAsync(cancellationTokenSource);
@@ -2296,9 +2311,9 @@ namespace MyGeotabAPIAdapter
                     var updateFailureModeCacheAsyncTask = UpdateFailureModeCacheAsync(cancellationTokenSource);
                     var updateUnitOfMeasureCacheAsyncTask = UpdateUnitOfMeasureCacheAsync(cancellationTokenSource);
                     var updateRuleCacheAndPersistToDatabaseAsyncTask = UpdateRuleCacheAndPersistToDatabaseAsync(cancellationTokenSource);
-                    var updateGroupCacheAsyncTask = UpdateGroupCacheAsync(cancellationTokenSource);
+                    //var updateGroupCacheAsyncTask = UpdateGroupCacheAsync(cancellationTokenSource);
 
-                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAsyncTask };
+                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask };
 
                     try
                     {
@@ -2406,6 +2421,25 @@ namespace MyGeotabAPIAdapter
             logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
 
             await CacheManager.UpdateCacheAsync<Group>(cancellationTokenSource, CacheManager.GroupCacheContainer, Globals.ConfigurationManager.GroupCacheIntervalDailyReferenceStartTimeUTC, Globals.ConfigurationManager.GroupCacheUpdateIntervalMinutes, Globals.ConfigurationManager.GroupCacheRefreshIntervalMinutes, false);
+
+            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+        }
+
+        /// <summary>
+        /// Updates the <see cref="Group"/> cache and persists cache updates to the database.
+        /// </summary>
+        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
+        /// <returns></returns>
+        async Task UpdateGroupCacheAndPersistToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
+        {
+            MethodBase methodBase = MethodBase.GetCurrentMethod();
+            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
+
+            CancellationToken cancellationToken = cancellationTokenSource.Token;
+
+            await CacheManager.UpdateCacheAsync<Group>(cancellationTokenSource, CacheManager.GroupCacheContainer, Globals.ConfigurationManager.GroupCacheIntervalDailyReferenceStartTimeUTC, Globals.ConfigurationManager.GroupCacheUpdateIntervalMinutes, Globals.ConfigurationManager.GroupCacheRefreshIntervalMinutes, false);
+            cancellationToken.ThrowIfCancellationRequested();
+            await PropagateGroupCacheUpdatesToDatabaseAsync(cancellationTokenSource);
 
             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
         }

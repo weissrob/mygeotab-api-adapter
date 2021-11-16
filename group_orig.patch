@@ -1,0 +1,1480 @@
+diff --git a/.gitignore b/.gitignore
+index 33b12c9..4d6fb45 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -2,6 +2,7 @@
+ # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+ ################################################################################
+ 
++/MyGeotabAPIAdapter/mono_crash.*
+ /MyGeotabAPIAdapter/appsettings.json
+ /MyGeotabAPIAdapter/appsettings.Publish.json
+ /MyGeotab API Adapter/bin/Debug/netcoreapp3.1
+diff --git a/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRepository.cs b/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRepository.cs
+new file mode 100644
+index 0000000..1146992
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRepository.cs
+@@ -0,0 +1,105 @@
++﻿using MyGeotabAPIAdapter.Database.Models;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace MyGeotabAPIAdapter.Database.DataAccess
++{
++    /// <summary>
++    /// A repository class that handles database CRUD operations for <see cref="DbGroup"/> entities.
++    /// </summary>
++    public class DbGroupRepository : BaseRepository<DbGroup>
++    {
++        /// <summary>
++        /// Retrieves a <see cref="DbGroup"/> with the specified <see cref="DbGroup.GeotabId"/>. Throws an <see cref="Exception"/> if an entity with the specified ID cannot be found.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="id">The ID of the database record to be returned.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<DbGroup> GetAsync(ConnectionInfo connectionInfo, string id, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            var record = await GetAsync(connectionInfo, new { Id = id }, commandTimeout);
++            cancellationToken.ThrowIfCancellationRequested();
++            if (record.Any())
++            {
++                return record.FirstOrDefault();
++            }
++            throw new Exception($"{typeof(DbGroup).Name} with Id '{id}' not found.");
++        }
++
++        /// <summary>
++        /// Inserts a number of <see cref="DbGroup"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroups">A list of <see cref="DbGroup"/> entities to be inserted.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<long> InsertAsync(ConnectionInfo connectionInfo, List<DbGroup> dbGroups, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            long insertedRowsCount = 0;
++            try
++            {
++                using (var connection = await new ConnectionProvider(connectionInfo).GetOpenConnectionAsync())
++                {
++                    using (var transaction = await connection.BeginTransactionAsync())
++                    {
++                        foreach (var dbGroup in dbGroups)
++                        {
++                            await InsertAsync(connection, transaction, dbGroup, commandTimeout);
++                            insertedRowsCount += 1;
++                            cancellationToken.ThrowIfCancellationRequested();
++                        }
++                        await transaction.CommitAsync();
++                    }
++                    return insertedRowsCount;
++                }
++            }
++            catch (Exception exception)
++            {
++                throw new DatabaseConnectionException($"Exception encountered while attempting database operation.", exception);
++            }
++        }
++
++        /// <summary>
++        /// Updates a number of <see cref="DbGroup"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroups">A list of <see cref="DbGroup"/> entities to be updated.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<long> UpdateAsync(ConnectionInfo connectionInfo, List<DbGroup> dbGroups, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            long updatedRowsCount = 0;
++            try
++            {
++                using (var connection = await new ConnectionProvider(connectionInfo).GetOpenConnectionAsync())
++                {
++                    using (var transaction = await connection.BeginTransactionAsync())
++                    {
++                        foreach (var dbGroup in dbGroups)
++                        {
++                            await UpdateAsync(connection, transaction, dbGroup, commandTimeout);
++                            updatedRowsCount += 1;
++                            cancellationToken.ThrowIfCancellationRequested();
++                        }
++                        await transaction.CommitAsync();
++                    }
++                    return updatedRowsCount;
++                }
++            }
++            catch (Exception exception)
++            {
++                throw new DatabaseConnectionException($"Exception encountered while attempting database operation.", exception);
++            }
++        }
++    }
++}
+diff --git a/MyGeotabAPIAdapter.Database/Logic/DbGroupService.cs b/MyGeotabAPIAdapter.Database/Logic/DbGroupService.cs
+new file mode 100644
+index 0000000..41c0fb1
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/Logic/DbGroupService.cs
+@@ -0,0 +1,69 @@
++﻿using MyGeotabAPIAdapter.Database.DataAccess;
++using MyGeotabAPIAdapter.Database.Models;
++using System;
++using System.Collections.Generic;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace MyGeotabAPIAdapter.Database.Logic
++{
++    /// <summary>
++    /// A service class that handles database CRUD operations for <see cref="DbGroup"/> entities.
++    /// </summary>
++    public static class DbGroupService
++    {
++        /// <summary>
++        /// Retrieves a <see cref="DbGroup"/> with the specified <see cref="DbGroup.GeotabId"/>. Throws an <see cref="Exception"/> if an entity with the specified ID cannot be found.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="id">The ID of the database record to be returned.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<DbGroup> GetAsync(ConnectionInfo connectionInfo, string id, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRepository().GetAsync(connectionInfo, id, cancellationTokenSource, commandTimeout);
++        }
++
++        /// <summary>
++        /// Retrieves all <see cref="DbGroup"/> entities.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<IEnumerable<DbGroup>> GetAllAsync(ConnectionInfo connectionInfo, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            var result = await new DbGroupRepository().GetAllAsync(connectionInfo, commandTimeout);
++            cancellationToken.ThrowIfCancellationRequested();
++            return result;
++        }
++
++        /// <summary>
++        /// Inserts a number of <see cref="DbGroup"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroups">A list of <see cref="DbGroup"/> entities to be inserted.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<long> InsertAsync(ConnectionInfo connectionInfo, List<DbGroup> dbGroups, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRepository().InsertAsync(connectionInfo, dbGroups, cancellationTokenSource, commandTimeout);
++        }
++
++        /// <summary>
++        /// Updates a number of <see cref="DbGroup"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroups">A list of <see cref="DbGroup"/> entities to be updated.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<long> UpdateAsync(ConnectionInfo connectionInfo, List<DbGroup> dbGroups, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRepository().UpdateAsync(connectionInfo, dbGroups, cancellationTokenSource, commandTimeout);
++        }
++    }
++}
+diff --git a/MyGeotabAPIAdapter.Database/Models/DbGroup.cs b/MyGeotabAPIAdapter.Database/Models/DbGroup.cs
+new file mode 100644
+index 0000000..d2506b0
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/Models/DbGroup.cs
+@@ -0,0 +1,22 @@
++﻿using Dapper.Contrib.Extensions;
++using System;
++
++namespace MyGeotabAPIAdapter.Database.Models
++{
++    [Table("Groups")]
++    public class DbGroup
++    {
++        [Key]
++        public long id { get; set; }
++        public string GeotabId { get; set; }
++        public string ParentId { get; set; }
++        public string Name { get; set; }
++        public string Color { get; set; }
++        public string Comments { get; set; }
++        public string Reference { get; set; }
++        public int EntityStatus { get; set; }
++        public DateTime RecordLastChangedUtc { get; set; }
++        [Write(false)]
++        public Common.DatabaseWriteOperationType DatabaseWriteOperationType { get; set; }
++    }
++}
+\ No newline at end of file
+diff --git a/MyGeotabAPIAdapter/ConfigurationManager.cs b/MyGeotabAPIAdapter/ConfigurationManager.cs
+index ed74d5d..e1c5a69 100644
+--- a/MyGeotabAPIAdapter/ConfigurationManager.cs
++++ b/MyGeotabAPIAdapter/ConfigurationManager.cs
+@@ -141,6 +141,7 @@ namespace MyGeotabAPIAdapter
+         const string TableNameDbExceptionEvent = "ExceptionEvents";
+         const string TableNameDbFailedDVIRDefectUpdates = "FailedDVIRDefectUpdates";
+         const string TableNameDbFaultData = "FaultData";
++        const string TableNameDbGroup = "Groups";
+         const string TableNameDbLogRecord = "LogRecords";
+         const string TableNameDbRule = "Rules";
+         const string TableNameDbStatusData = "StatusData";
+@@ -398,6 +399,14 @@ namespace MyGeotabAPIAdapter
+             get => TableNameDbFaultData;
+         }
+ 
++        /// <summary>
++        /// The name of the database table for <see cref="Group"/> information.
++        /// </summary>
++        public static string DbGroupTableName
++        {
++            get => TableNameDbGroup;
++        }
++
+         /// <summary>
+         /// The name of the database table for <see cref="LogRecord"/> information.
+         /// </summary>
+diff --git a/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs b/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
+index 2d6a93f..6f70062 100644
+--- a/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
++++ b/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
+@@ -175,6 +175,7 @@ namespace MyGeotabAPIAdapter
+                                             }
+                                             catch (Exception)
+                                             {
++                                                logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
+                                                 cancellationTokenSource.Cancel();
+                                                 throw;
+                                             }
+@@ -193,6 +194,7 @@ namespace MyGeotabAPIAdapter
+                                             }
+                                             catch (Exception)
+                                             {
++                                                logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
+                                                 cancellationTokenSource.Cancel();
+                                                 throw;
+                                             }
+diff --git a/MyGeotabAPIAdapter/ObjectMapper.cs b/MyGeotabAPIAdapter/ObjectMapper.cs
+index 8edabec..fca7d05 100644
+--- a/MyGeotabAPIAdapter/ObjectMapper.cs
++++ b/MyGeotabAPIAdapter/ObjectMapper.cs
+@@ -101,6 +101,30 @@ namespace MyGeotabAPIAdapter
+             return false;
+         }
+ 
++        /// <summary>
++        /// Indicates whether the <see cref="DbGroup"/> differs from the <see cref="Group"/>, thereby requiring the <see cref="DbGroup"/> to be updated in the database. 
++        /// </summary>
++        /// <param name="dbGroup">The <see cref="DbGroup"/> to be evaluated.</param>
++        /// <param name="group">The <see cref="Group"/> to compare against.</param>
++        /// <returns></returns>
++        public static bool DbGroupRequiresUpdate(DbGroup dbGroup, Group group)
++        {
++            if (dbGroup.GeotabId != group.Id.ToString())
++            {
++                throw new ArgumentException($"Cannot compare Group '{group.Id}' with DbGroup '{dbGroup.GeotabId}' because the IDs do not match.");
++            }
++
++            if ((dbGroup.Comments != group.Comments) && (dbGroup.Comments != null && group.Comments != ""))
++            {
++                return true;
++            }
++            if ((dbGroup.Name != group.Name) && (dbGroup.Name != null && group.Name != ""))
++            {
++                return true;
++            }
++            return false;
++        }
++
+         /// <summary>
+         /// Indicates whether the <see cref="DbRule"/> of the <see cref="DbRuleObject"/> differs from the <see cref="Rule"/>, 
+         /// thereby requiring the <see cref="DbRule"/> and related <see cref="DbCondition"/> objects to be updated in the database. 
+@@ -901,6 +925,43 @@ namespace MyGeotabAPIAdapter
+             return dbFaultDatas;
+         }
+ 
++        /// <summary>
++        /// Converts the supplied <see cref="Group"/> into a <see cref="DbGroup"/>.
++        /// </summary>
++        /// <param name="">The <see cref="Group"/> to be converted.</param>
++        /// <returns></returns>
++        public static DbGroup GetDbGroup(Group group)
++        {
++            DbGroup dbGroup = new()
++            {
++                GeotabId = group.Id.ToString(),
++                Name = group.Name,
++                Comments = group.Comments,
++                Reference = group.Reference,
++                ParentId = "", //group.ParentId,
++                Color = "", //group.Color,
++            };
++            return dbGroup;
++        }
++
++        /// <summary>
++        /// Converts the supplied list of <see cref="Group"/> objects into a list of <see cref="DbGroup"/> objects.
++        /// </summary>
++        /// <param name="groups">The list of <see cref="Group"/> objects to be converted.</param>
++        /// <returns></returns>
++        public static List<DbGroup> GetDbGroups(List<Group> groups)
++        {
++            DateTime RecordLastChangedUtc = DateTime.UtcNow;
++            var dbGroups = new List<DbGroup>();
++            foreach (var group in groups)
++            {
++                DbGroup dbGroup = GetDbGroup(group);
++                dbGroup.RecordLastChangedUtc = RecordLastChangedUtc;
++                dbGroups.Add(dbGroup);
++            }
++            return dbGroups;
++        }
++
+         /// <summary>
+         /// Converts the supplied <see cref="LogRecord"/> into a <see cref="DbLogRecord"/>.
+         /// </summary>
+diff --git a/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql b/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
+index 6d294ac..e60e396 100644
+--- a/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
++++ b/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
+@@ -42,43 +42,6 @@ SET default_tablespace = '';
+ 
+ SET default_with_oids = false;
+ 
+---
+--- Name: Groups; Type: TABLE; Schema: public; Owner: geotabadapter_owner
+---
+-
+-CREATE TABLE public."Groups" (
+-    id bigint NOT NULL,
+-    "GeotabId" character varying(50) NOT NULL,
+-    "ParentId" character varying(50),
+-    "Name" character varying(50) NOT NULL,
+-    "Color" character varying(50),
+-    "Comments" character varying(100),
+-    "Reference" character varying(255),
+-    "RecordLastChangedUtc" timestamp without time zone NOT NULL
+-);
+-
+-ALTER TABLE public."Groups" OWNER TO geotabadapter_owner;
+-
+---
+--- Name: Groups_id_seq; Type: SEQUENCE; Schema: public; Owner: geotabadapter_owner
+---
+-
+-CREATE SEQUENCE public."Groups_id_seq"
+-    START WITH 1
+-    INCREMENT BY 1
+-    NO MINVALUE
+-    NO MAXVALUE
+-    CACHE 1;
+-
+-ALTER TABLE public."Groups_id_seq" OWNER TO geotabadapter_owner;
+-
+---
+--- Name: Groups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: geotabadapter_owner
+---
+-
+-ALTER SEQUENCE public."Groups_id_seq" OWNED BY public."Groups".id;
+-
+-
+ --
+ -- Name: Conditions; Type: TABLE; Schema: public; Owner: geotabadapter_owner
+ --
+@@ -639,6 +602,45 @@ ALTER TABLE public."FaultData_id_seq" OWNER TO geotabadapter_owner;
+ ALTER SEQUENCE public."FaultData_id_seq" OWNED BY public."FaultData".id;
+ 
+ 
++--
++-- Name: Groups; Type: TABLE; Schema: public; Owner: geotabadapter_owner
++--
++
++CREATE TABLE public."Groups" (
++    id bigint NOT NULL,
++    "GeotabId" character varying(50) NOT NULL,
++    "Name" character varying(255) NOT NULL,
++    "ParentId" text,
++    "Children" text,
++    "Color" text,
++    "Comments" text,
++    "Reference" character varying(255),
++    "EntityStatus" integer NOT NULL,
++    "RecordLastChangedUtc" timestamp without time zone NOT NULL
++);
++
++ALTER TABLE public."Groups" OWNER TO geotabadapter_owner;
++
++--
++-- Name: Groups_id_seq; Type: SEQUENCE; Schema: public; Owner: geotabadapter_owner
++--
++
++CREATE SEQUENCE public."Groups_id_seq"
++    START WITH 1
++    INCREMENT BY 1
++    NO MINVALUE
++    NO MAXVALUE
++    CACHE 1;
++
++ALTER TABLE public."Groups_id_seq" OWNER TO geotabadapter_owner;
++
++--
++-- Name: Groups_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: geotabadapter_owner
++--
++
++ALTER SEQUENCE public."Groups_id_seq" OWNED BY public."Groups".id;
++
++
+ --
+ -- Name: LogRecords; Type: TABLE; Schema: public; Owner: geotabadapter_owner
+ --
+@@ -1116,6 +1118,12 @@ ALTER TABLE ONLY public."FailedDVIRDefectUpdates" ALTER COLUMN id SET DEFAULT ne
+ 
+ ALTER TABLE ONLY public."FaultData" ALTER COLUMN id SET DEFAULT nextval('public."FaultData_id_seq"'::regclass);
+ 
++--
++-- Name: Groups id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
++--
++
++ALTER TABLE ONLY public."Groups" ALTER COLUMN id SET DEFAULT nextval('public."Groups_id_seq"'::regclass);
++
+ 
+ --
+ -- Name: LogRecords id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+@@ -1130,11 +1138,6 @@ ALTER TABLE ONLY public."LogRecords" ALTER COLUMN id SET DEFAULT nextval('public
+ 
+ ALTER TABLE ONLY public."OVDSServerCommands" ALTER COLUMN id SET DEFAULT nextval('public."OVDSServerCommands_id_seq"'::regclass);
+ 
+---
+--- Name: Groups id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+---
+-
+-ALTER TABLE ONLY public."Groups" ALTER COLUMN id SET DEFAULT nextval('public."Groups_id_seq"'::regclass);
+ 
+ --
+ -- Name: Rules id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+diff --git a/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql b/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
+index 7fd40fd..02f5972 100644
+--- a/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
++++ b/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
+@@ -12,6 +12,7 @@
+ -- delete from [dbo].[ExceptionEvents];
+ -- delete from [dbo].[FailedDVIRDefectUpdates];
+ -- delete from [dbo].[FaultData];
++-- delete from [dbo].[Groups];
+ -- delete from [dbo].[LogRecords];
+ -- delete from [dbo].[MyGeotabVersionInfo];
+ -- delete from [dbo].[Rules];
+@@ -33,6 +34,7 @@
+ --DBCC CHECKIDENT ('dbo.ExceptionEvents', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.FailedDVIRDefectUpdates', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.FaultData', RESEED, 0);
++--DBCC CHECKIDENT ('dbo.Groups', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.LogRecords', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.Rules', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.StatusData', RESEED, 0);
+@@ -69,6 +71,8 @@ select 'FailedDVIRDefectUpdates', SUM(st.row_count) FROM sys.dm_db_partition_sta
+ union all
+ select 'FaultData', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'FaultData'
+ union all
++select 'Groups', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'Groups'
++union all
+ select 'LogRecords', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'LogRecords'
+ union all
+ select 'MyGeotabVersionInfo', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'MyGeotabVersionInfo'
+diff --git a/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql b/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql
+index b85e250..e44552c 100644
+Binary files a/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql and b/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql differ
+diff --git a/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql b/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
+index 177143d..28f2a42 100644
+--- a/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
++++ b/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
+@@ -12,6 +12,7 @@
+ --delete from "ExceptionEvents";
+ --delete from "FailedDVIRDefectUpdates";
+ --delete from "FaultData";
++--delete from "Groups";
+ --delete from "LogRecords";
+ --delete from "MyGeotabVersionInfo";
+ --delete from "Rules";
+@@ -48,6 +49,8 @@ select 'FailedDVIRDefectUpdates', count(0) from "FailedDVIRDefectUpdates"
+ union all
+ select 'FaultData', count(0) from "FaultData"
+ union all
++select 'Groups', count(0) from "Groups"
++union all
+ select 'LogRecords', count(0) from "LogRecords"
+ union all
+ select 'MyGeotabVersionInfo', count(0) from "MyGeotabVersionInfo"
+diff --git a/MyGeotabAPIAdapter/Worker.cs b/MyGeotabAPIAdapter/Worker.cs
+index 9c2c4cd..90ebbd9 100644
+--- a/MyGeotabAPIAdapter/Worker.cs
++++ b/MyGeotabAPIAdapter/Worker.cs
+@@ -36,7 +36,8 @@ namespace MyGeotabAPIAdapter
+         IDictionary<Id, DbDevice> dbDevicesDictionary;
+         IDictionary<Id, DbDiagnostic> dbDiagnosticsDictionary;
+         IDictionary<Id, DbDVIRDefect> dbDVIRDefectsDictionary;
+-        IDictionary<Id, DbDVIRDefectRemark> dbDVIRDefectRemarksDictionary;
++        IDictionary<Id, DbDVIRDefectRemark> dbDVIRDefectRemarksDictionary;
++        IDictionary<Id, DbGroup> dbGroupsDictionary;
+         IDictionary<Id, DbRuleObject> dbRuleObjectDictionary;
+         IDictionary<Id, DbUser> dbUsersDictionary;
+         IDictionary<Id, DbZone> dbZonesDictionary;
+@@ -682,6 +683,7 @@ namespace MyGeotabAPIAdapter
+                     var getAllDbUsersTask = DbUserService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbDVIRDefectsTask = DbDVIRDefectService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbDVIRDefectRemarksTask = DbDVIRDefectRemarkService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                    var getAllDbGroupsTask = DbGroupService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbRuleObjectsTask = RuleHelper.GetDatabaseRuleObjectsAsync(cancellationTokenSource);
+                     var getAllDbZonesTask = DbZoneService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbZoneTypesTask = DbZoneTypeService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+@@ -696,6 +698,7 @@ namespace MyGeotabAPIAdapter
+                     dbUsersDictionary = getAllDbUsersTask.Result.ToDictionary(user => Id.Create(user.GeotabId));
+                     dbDVIRDefectsDictionary = getAllDbDVIRDefectsTask.Result.ToDictionary(dvirDefect => Id.Create(dvirDefect.GeotabId));
+                     dbDVIRDefectRemarksDictionary = getAllDbDVIRDefectRemarksTask.Result.ToDictionary(dvirDefectRemark => Id.Create(dvirDefectRemark.GeotabId));
++                    dbGroupsDictionary = getAllDbGroupsTask.Result.ToDictionary(dbGroup => Id.Create(dbGroup.GeotabId));
+                     dbRuleObjectDictionary = getAllDbRuleObjectsTask.Result.ToDictionary(dbRuleObject => Id.Create(dbRuleObject.GeotabId));
+                     dbZonesDictionary = getAllDbZonesTask.Result.ToDictionary(dbZone => Id.Create(dbZone.GeotabId));
+                     dbZoneTypesDictionary = getAllDbZoneTypesTask.Result.ToDictionary(dbZoneType => Id.Create(dbZoneType.GeotabId));
+@@ -1532,6 +1535,142 @@ namespace MyGeotabAPIAdapter
+ 
+             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+         }
++
++        /// <summary>
++        /// Propagates <see cref="Group"/> information received from MyGeotab to the database - inserting new records, updating existing records (if the values of any of the utilized fields have changed), and marking as deleted any database group records that no longer exist in MyGeotab (based on matching on ID). 
++        /// </summary>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <returns></returns>
++        async Task PropagateGroupCacheUpdatesToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
++        {
++            MethodBase methodBase = MethodBase.GetCurrentMethod();
++            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
++
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++
++            // Only propagate the cache to database if the cache has been updated since the last time it was propagated to database.
++            if (CacheManager.GroupCacheContainer.LastUpdatedTimeUtc > CacheManager.GroupCacheContainer.LastPropagatedToDatabaseTimeUtc)
++            {
++                DateTime recordChangedTimestampUtc = DateTime.UtcNow;
++                var dbGroupsToInsert = new List<DbGroup>();
++                var dbGroupsToUpdate = new List<DbGroup>();
++
++                // Get cached groups.
++                var groupCache = (Dictionary<Id, Group>)CacheManager.GroupCacheContainer.Cache;
++
++                // Find any groups that have been deleted in MyGeotab but exist in the database and have not yet been flagged as deleted. Update them so that they will be flagged as deleted in the database.
++                if (dbGroupsDictionary.Any())
++                {
++                    foreach (DbGroup dbGroup in dbGroupsDictionary.Values.ToList())
++                    {
++                        if (dbGroup.EntityStatus == (int)Common.DatabaseRecordStatus.Active)
++                        {
++                            bool groupExistsInCache = groupCache.ContainsKey(Id.Create(dbGroup.GeotabId));
++                            if (!groupExistsInCache)
++                            {
++                                logger.Info($"Group '{dbGroup.GeotabId}' no longer exists in MyGeotab and is being marked as deleted.");
++                                dbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Deleted;
++                                dbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
++                                dbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
++                                dbGroupsDictionary[Id.Create(dbGroup.GeotabId)] = dbGroup;
++                                dbGroupsToUpdate.Add(dbGroup);
++                            }
++                        }
++                    }
++                }
++                else
++                {
++                    logger.Info($"Group cache in database requires no deletes.");
++                }
++
++                // Iterate through cached groups.
++                foreach (Group cachedGroup in groupCache.Values.ToList())
++                {
++                    // Try to find the existing database record for the cached group.
++                    if (dbGroupsDictionary.TryGetValue(cachedGroup.Id, out var existingDbGroup))
++                    {
++                        // The group has already been added to the database.
++                        bool dbGroupRequiresUpdate = ObjectMapper.DbGroupRequiresUpdate(existingDbGroup, cachedGroup);
++                        if (dbGroupRequiresUpdate)
++                        {
++                            //logger.Info($"Updating Group '{cachedGroup.Name}' in the database.");
++                            DbGroup updatedDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
++                            updatedDbGroup.id = existingDbGroup.id;
++                            updatedDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
++                            updatedDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
++                            updatedDbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
++                            dbGroupsDictionary[Id.Create(updatedDbGroup.GeotabId)] = updatedDbGroup;
++                            dbGroupsToUpdate.Add(updatedDbGroup);
++                        }
++                        /*
++                        else
++                        {
++                            logger.Info($"Group cache has not been added to the database.");
++                        }
++                        */
++                    }
++                    else
++                    {
++                        // The group has not yet been added to the database. Create a DbGroup, set its properties and add it to the cache.
++                        logger.Info($"Marking Group '{cachedGroup.Name}' to be added to the database.");
++                        DbGroup newDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
++                        newDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
++                        newDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
++                        newDbGroup.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Insert;
++                        dbGroupsDictionary.Add(Id.Create(newDbGroup.GeotabId), newDbGroup);
++                        dbGroupsToInsert.Add(newDbGroup);
++
++                    }
++                }
++
++                cancellationToken.ThrowIfCancellationRequested();
++
++                // Send any inserts to the database.
++                if (dbGroupsToInsert.Any())
++                {
++                    try
++                    {
++                        DateTime startTimeUTC = DateTime.UtcNow;
++                        long groupEntitiesInserted = await DbGroupService.InsertAsync(connectionInfo, dbGroupsToInsert, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
++                        double recordsProcessedPerSecond = (double)groupEntitiesInserted / (double)elapsedTime.TotalSeconds;
++                        logger.Info($"Completed insertion of {groupEntitiesInserted} records into {ConfigurationManager.DbGroupTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
++                    }
++                    catch (Exception)
++                    {
++                        logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbGroupTableName} table.");
++                        cancellationTokenSource.Cancel();
++                        throw;
++                    }
++                }
++
++                // Send any updates/deletes to the database.
++                if (dbGroupsToUpdate.Any())
++                {
++                    try
++                    {
++                        DateTime startTimeUTC = DateTime.UtcNow;
++                        long groupEntitiesUpdated = await DbGroupService.UpdateAsync(connectionInfo, dbGroupsToUpdate, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
++                        double recordsProcessedPerSecond = (double)groupEntitiesUpdated / (double)elapsedTime.TotalSeconds;
++                        logger.Info($"Completed updating of {groupEntitiesUpdated} records in {ConfigurationManager.DbGroupTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
++                    }
++                    catch (Exception)
++                    {
++                        logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
++                        cancellationTokenSource.Cancel();
++                        throw;
++                    }
++                }
++                CacheManager.GroupCacheContainer.LastPropagatedToDatabaseTimeUtc = DateTime.UtcNow;
++            }
++            else
++            {
++                logger.Info($"Group cache in database is up-to-date.");
++            }
++
++            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
++        }
+ 
+         /// <summary>
+         /// Propagates <see cref="Geotab.Checkmate.ObjectModel.Exceptions.Rule"/> information received from MyGeotab to the database - inserting new records, updating existing records (if the values of any of the utilized fields have changed), and marking as deleted any database device records that no longer exist in MyGeotab (based on matching on ID). 
+@@ -2164,6 +2303,7 @@ namespace MyGeotabAPIAdapter
+                 {
+                     var updateUserCacheAndPersistToDatabaseAsyncTask = UpdateUserCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateDeviceCacheAndPersistToDatabaseAsyncTask = UpdateDeviceCacheAndPersistToDatabaseAsync(cancellationTokenSource);
++                    var updateGroupCacheAndPersistToDatabaseAsyncTask = UpdateGroupCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateZoneTypeCacheAndPersistToDatabaseAsyncTask = UpdateZoneTypeCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateZoneCacheAndPersistToDatabaseAsyncTask = UpdateZoneCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateDiagnosticCacheAndPersistToDatabaseAsyncTask = UpdateDiagnosticCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+@@ -2171,9 +2311,9 @@ namespace MyGeotabAPIAdapter
+                     var updateFailureModeCacheAsyncTask = UpdateFailureModeCacheAsync(cancellationTokenSource);
+                     var updateUnitOfMeasureCacheAsyncTask = UpdateUnitOfMeasureCacheAsync(cancellationTokenSource);
+                     var updateRuleCacheAndPersistToDatabaseAsyncTask = UpdateRuleCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     //var updateGroupCacheAsyncTask = UpdateGroupCacheAsync(cancellationTokenSource);
+ 
+-                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAsyncTask };
++                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask };
+ 
+                     try
+                     {
+@@ -2285,6 +2425,25 @@ namespace MyGeotabAPIAdapter
+             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+         }
+ 
++        /// <summary>
++        /// Updates the <see cref="Group"/> cache and persists cache updates to the database.
++        /// </summary>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <returns></returns>
++        async Task UpdateGroupCacheAndPersistToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
++        {
++            MethodBase methodBase = MethodBase.GetCurrentMethod();
++            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
++
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++
++            await CacheManager.UpdateCacheAsync<Group>(cancellationTokenSource, CacheManager.GroupCacheContainer, Globals.ConfigurationManager.GroupCacheIntervalDailyReferenceStartTimeUTC, Globals.ConfigurationManager.GroupCacheUpdateIntervalMinutes, Globals.ConfigurationManager.GroupCacheRefreshIntervalMinutes, false);
++            cancellationToken.ThrowIfCancellationRequested();
++            await PropagateGroupCacheUpdatesToDatabaseAsync(cancellationTokenSource);
++
++            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
++        }
++
+         /// <summary>
+         /// Updates the <see cref="Geotab.Checkmate.ObjectModel.Exceptions.Rule"/> cache and persists cache updates to the database.
+         /// </summary>
+diff --git a/MyGeotabAPIAdapter/mono_crash.11a67480d0.0.json b/MyGeotabAPIAdapter/mono_crash.11a67480d0.0.json
+deleted file mode 100644
+index 554b8f8..0000000
+--- a/MyGeotabAPIAdapter/mono_crash.11a67480d0.0.json
++++ /dev/null
+@@ -1,730 +0,0 @@
+-{
+-  "protocol_version" : "0.0.6",
+-  "configuration" : {
+-    "version" : "(6.12.0.140) (2020-02/51d876a041e)",
+-    "tlc" : "normal",
+-    "sigsgev" : "altstack",
+-    "notifications" : "kqueue",
+-    "architecture" : "amd64",
+-    "disabled_features" : "none",
+-    "smallconfig" : "disabled",
+-    "bigarrays" : "disabled",
+-    "softdebug" : "enabled",
+-    "interpreter" : "enabled",
+-    "llvm_support" : "0",
+-    "suspend" : "hybrid"
+-  },
+-  "memory" : {
+-    "Resident Size" : "202006528",
+-    "Virtual Size" : "4748972032",
+-    "minor_gc_time" : "452121",
+-    "major_gc_time" : "0",
+-    "minor_gc_count" : "2",
+-    "major_gc_count" : "0",
+-    "major_gc_time_concurrent" : "0"
+- },
+-  "threads" : [
+- {
+-    "is_managed" : false,
+-    "offset_free_hash" : "0x0",
+-    "offset_rich_hash" : "0x0",
+-    "crashed" : false,
+-    "native_thread_id" : "0x104b70e00",
+-    "thread_info_addr" : "0x7fa120809400",
+-    "thread_name" : "tid_103",
+-    "ctx" : {
+-      "IP" : "0x7fff2049fcde",
+-      "SP" : "0x7ffeebad1b28",
+-      "BP" : "0x7ffeebad1bd0"
+-  },
+-    "unmanaged_frames" : [
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x1041de956",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10437a0d5",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x104379e07",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10424a920",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x7fff20517d7d",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "unregistered"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x104414e80",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10442cfb1",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x104376ff4",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x104376dfa",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x1041a3fea",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x1041301a8",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x7fff204edf3d",
+-      "native_offset" : "0x00000"
+-   }
+-
+-  ]
+- },
+- {
+-    "is_managed" : false,
+-    "offset_free_hash" : "0xb38e38d3",
+-    "offset_rich_hash" : "0xb38e38d3",
+-    "crashed" : false,
+-    "native_thread_id" : "0x70000a506000",
+-    "thread_info_addr" : "0x7fa122022600",
+-    "thread_name" : "Finalizer",
+-    "ctx" : {
+-      "IP" : "0x7fff2049d2f6",
+-      "SP" : "0x70000a505eb8",
+-      "BP" : "0x70000a505f00"
+-  },
+-    "unmanaged_frames" : [
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x1041de956",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10437a0d5",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x104379e07",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10424a920",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x7fff20517d7d",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x600146e",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x10437ad1d",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x7fff204d28fc",
+-      "native_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "0x7fff204ce443",
+-      "native_offset" : "0x00000"
+-   }
+-
+-  ]
+- },
+- {
+-    "is_managed" : true,
+-    "offset_free_hash" : "0x11a67480d0",
+-    "offset_rich_hash" : "0x11a67485e5",
+-    "crashed" : true,
+-    "native_thread_id" : "0x70000cf0e000",
+-    "thread_info_addr" : "0x7fa123827800",
+-    "thread_name" : "tid_8f03",
+-    "ctx" : {
+-      "IP" : "0x7fff204a392e",
+-      "SP" : "0x70000cf06b18",
+-      "BP" : "0x70000cf06b40"
+-  },
+-    "managed_frames" : [
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "unregistered"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x00000",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x00000",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00015"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x600427f",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0x0026a"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x600447f",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0x00043"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed3",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00071"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed1",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed0",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x0002b"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x600427e",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0x00093"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x00000",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0xffffffff"
+-   }
+-,
+-  {
+-      "is_managed" : "false",
+-      "native_address" : "unregistered"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x00000",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-      "token" : "0x6004477",
+-      "native_offset" : "0x0",
+-      "filename" : "System.dll",
+-      "sizeofimage" : "0x290000",
+-      "timestamp" : "0xae21f1c6",
+-      "il_offset" : "0x0003a"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001f2b",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00025"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed3",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00071"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed1",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x00000"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x6001ed0",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x0002b"
+-   }
+-,
+-  {
+-      "is_managed" : "true",
+-      "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-      "token" : "0x00000",
+-      "native_offset" : "0x0",
+-      "filename" : "mscorlib.dll",
+-      "sizeofimage" : "0x472000",
+-      "timestamp" : "0xa45d0dbd",
+-      "il_offset" : "0x0002a"
+-   }
+-
+-  ],
+-  "unmanaged_frames" : [
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1041de956",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10437a0d5",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10437a74a",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10424b9e7",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1041e35ee",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10424acdf",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff20517d7d",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "unregistered"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff20427406",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x104437f57",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x104418dbf",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1044383ee",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10443856f",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1044385aa",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10442cd7e",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x104374641",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10437b2bd",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x104378f2c",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x00000",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x00000",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-    "token" : "0x600427f",
+-    "native_offset" : "0x0",
+-    "filename" : "System.dll",
+-    "sizeofimage" : "0x290000",
+-    "timestamp" : "0xae21f1c6",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-    "token" : "0x600447f",
+-    "native_offset" : "0x0",
+-    "filename" : "System.dll",
+-    "sizeofimage" : "0x290000",
+-    "timestamp" : "0xae21f1c6",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x6001ed3",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x6001ed1",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-    "token" : "0x00000",
+-    "native_offset" : "0x0",
+-    "filename" : "System.dll",
+-    "sizeofimage" : "0x290000",
+-    "timestamp" : "0xae21f1c6",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff272c3eff",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff272c306e",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff272c2f67",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff272c64d7",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff205f80f2",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff205cc0d4",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff205cbfb5",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff205ca63f",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff205c961c",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff2064ff12",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1071bffcc",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-    "token" : "0x00000",
+-    "native_offset" : "0x0",
+-    "filename" : "System.dll",
+-    "sizeofimage" : "0x290000",
+-    "timestamp" : "0xae21f1c6",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "BD24F2D5-173E-4EF0-BCAC-9E2F08461AE4",
+-    "token" : "0x6004477",
+-    "native_offset" : "0x0",
+-    "filename" : "System.dll",
+-    "sizeofimage" : "0x290000",
+-    "timestamp" : "0xae21f1c6",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x6001f2b",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "true",
+-    "guid" : "92218043-4747-44EA-9D64-D27064C35DCB",
+-    "token" : "0x6001ed1",
+-    "native_offset" : "0x0",
+-    "filename" : "mscorlib.dll",
+-    "sizeofimage" : "0x472000",
+-    "timestamp" : "0xa45d0dbd",
+-    "il_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1041408c2",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10434ff07",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x1043567b0",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x10437ad5d",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff204d28fc",
+-    "native_offset" : "0x00000"
+-  }
+-,
+- {
+-    "is_managed" : "false",
+-    "native_address" : "0x7fff204ce443",
+-    "native_offset" : "0x00000"
+-  }
+-
+- ]
+-}
+-]
+-}
+\ No newline at end of file

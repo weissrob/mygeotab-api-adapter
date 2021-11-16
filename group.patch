@@ -1,0 +1,672 @@
+diff --git a/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRelationRepository.cs b/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRelationRepository.cs
+new file mode 100644
+index 0000000..1146992
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/DataAccess/DbGroupRelationRepository.cs
+@@ -0,0 +1,105 @@
++﻿using MyGeotabAPIAdapter.Database.Models;
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace MyGeotabAPIAdapter.Database.DataAccess
++{
++    /// <summary>
++    /// A repository class that handles database CRUD operations for <see cref="DbGroupRelation"/> entities.
++    /// </summary>
++    public class DbGroupRelationRepository : BaseRepository<DbGroupRelation>
++    {
++        /// <summary>
++        /// Retrieves a <see cref="DbGroupRelation"/> with the specified <see cref="DbGroupRelation.GeotabId"/>. Throws an <see cref="Exception"/> if an entity with the specified ID cannot be found.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="id">The ID of the database record to be returned.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<DbGroupRelation> GetAsync(ConnectionInfo connectionInfo, string id, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            var record = await GetAsync(connectionInfo, new { Id = id }, commandTimeout);
++            cancellationToken.ThrowIfCancellationRequested();
++            if (record.Any())
++            {
++                return record.FirstOrDefault();
++            }
++            throw new Exception($"{typeof(DbGroupRelation).Name} with Id '{id}' not found.");
++        }
++
++        /// <summary>
++        /// Inserts a number of <see cref="DbGroupRelation"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroupRelations">A list of <see cref="DbGroupRelation"/> entities to be inserted.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<long> InsertAsync(ConnectionInfo connectionInfo, List<DbGroupRelation> dbGroupRelations, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            long insertedRowsCount = 0;
++            try
++            {
++                using (var connection = await new ConnectionProvider(connectionInfo).GetOpenConnectionAsync())
++                {
++                    using (var transaction = await connection.BeginTransactionAsync())
++                    {
++                        foreach (var dbGroupRelation in dbGroupRelations)
++                        {
++                            await InsertAsync(connection, transaction, dbGroupRelation, commandTimeout);
++                            insertedRowsCount += 1;
++                            cancellationToken.ThrowIfCancellationRequested();
++                        }
++                        await transaction.CommitAsync();
++                    }
++                    return insertedRowsCount;
++                }
++            }
++            catch (Exception exception)
++            {
++                throw new DatabaseConnectionException($"Exception encountered while attempting database operation.", exception);
++            }
++        }
++
++        /// <summary>
++        /// Updates a number of <see cref="DbGroupRelation"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroupRelations">A list of <see cref="DbGroupRelation"/> entities to be updated.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public async Task<long> UpdateAsync(ConnectionInfo connectionInfo, List<DbGroupRelation> dbGroupRelations, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            long updatedRowsCount = 0;
++            try
++            {
++                using (var connection = await new ConnectionProvider(connectionInfo).GetOpenConnectionAsync())
++                {
++                    using (var transaction = await connection.BeginTransactionAsync())
++                    {
++                        foreach (var dbGroupRelation in dbGroupRelations)
++                        {
++                            await UpdateAsync(connection, transaction, dbGroupRelation, commandTimeout);
++                            updatedRowsCount += 1;
++                            cancellationToken.ThrowIfCancellationRequested();
++                        }
++                        await transaction.CommitAsync();
++                    }
++                    return updatedRowsCount;
++                }
++            }
++            catch (Exception exception)
++            {
++                throw new DatabaseConnectionException($"Exception encountered while attempting database operation.", exception);
++            }
++        }
++    }
++}
+diff --git a/MyGeotabAPIAdapter.Database/Logic/DbGroupRelationService.cs b/MyGeotabAPIAdapter.Database/Logic/DbGroupRelationService.cs
+new file mode 100644
+index 0000000..41c0fb1
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/Logic/DbGroupRelationService.cs
+@@ -0,0 +1,69 @@
++﻿using MyGeotabAPIAdapter.Database.DataAccess;
++using MyGeotabAPIAdapter.Database.Models;
++using System;
++using System.Collections.Generic;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace MyGeotabAPIAdapter.Database.Logic
++{
++    /// <summary>
++    /// A service class that handles database CRUD operations for <see cref="DbGroupRelation"/> entities.
++    /// </summary>
++    public static class DbGroupRelationService
++    {
++        /// <summary>
++        /// Retrieves a <see cref="DbGroupRelation"/> with the specified <see cref="DbGroupRelation.GeotabId"/>. Throws an <see cref="Exception"/> if an entity with the specified ID cannot be found.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="id">The ID of the database record to be returned.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<DbGroupRelation> GetAsync(ConnectionInfo connectionInfo, string id, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRelationRepository().GetAsync(connectionInfo, id, cancellationTokenSource, commandTimeout);
++        }
++
++        /// <summary>
++        /// Retrieves all <see cref="DbGroupRelation"/> entities.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<IEnumerable<DbGroupRelation>> GetAllAsync(ConnectionInfo connectionInfo, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++            var result = await new DbGroupRelationRepository().GetAllAsync(connectionInfo, commandTimeout);
++            cancellationToken.ThrowIfCancellationRequested();
++            return result;
++        }
++
++        /// <summary>
++        /// Inserts a number of <see cref="DbGroupRelation"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroupRelations">A list of <see cref="DbGroupRelation"/> entities to be inserted.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<long> InsertAsync(ConnectionInfo connectionInfo, List<DbGroupRelation> dbGroupRelations, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRelationRepository().InsertAsync(connectionInfo, dbGroupRelations, cancellationTokenSource, commandTimeout);
++        }
++
++        /// <summary>
++        /// Updates a number of <see cref="DbGroupRelation"/> entities into the database within a single transaction.
++        /// </summary>
++        /// <param name="connectionInfo">The database connection information.</param>
++        /// <param name="dbGroupRelations">A list of <see cref="DbGroupRelation"/> entities to be updated.</param>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <param name="commandTimeout">The number of seconds before command execution timeout.</param>
++        /// <returns></returns>
++        public static async Task<long> UpdateAsync(ConnectionInfo connectionInfo, List<DbGroupRelation> dbGroupRelations, CancellationTokenSource cancellationTokenSource, int commandTimeout)
++        {
++            return await new DbGroupRelationRepository().UpdateAsync(connectionInfo, dbGroupRelations, cancellationTokenSource, commandTimeout);
++        }
++    }
++}
+diff --git a/MyGeotabAPIAdapter.Database/Models/DbGroupRelation.cs b/MyGeotabAPIAdapter.Database/Models/DbGroupRelation.cs
+new file mode 100644
+index 0000000..d2506b0
+--- /dev/null
++++ b/MyGeotabAPIAdapter.Database/Models/DbGroupRelation.cs
+@@ -0,0 +1,22 @@
++﻿using Dapper.Contrib.Extensions;
++using System;
++
++namespace MyGeotabAPIAdapter.Database.Models
++{
++    [Table("GroupRelations")]
++    public class DbGroupRelation
++    {
++        [Key]
++        public long id { get; set; }
++        public string GeotabId { get; set; }
++        public string ParentId { get; set; }
++        public string Name { get; set; }
++        public string Color { get; set; }
++        public string Comments { get; set; }
++        public string Reference { get; set; }
++        public int EntityStatus { get; set; }
++        public DateTime RecordLastChangedUtc { get; set; }
++        [Write(false)]
++        public Common.DatabaseWriteOperationType DatabaseWriteOperationType { get; set; }
++    }
++}
+\ No newline at end of file
+diff --git a/MyGeotabAPIAdapter/ConfigurationManager.cs b/MyGeotabAPIAdapter/ConfigurationManager.cs
+index ed74d5d..e1c5a69 100644
+--- a/MyGeotabAPIAdapter/ConfigurationManager.cs
++++ b/MyGeotabAPIAdapter/ConfigurationManager.cs
+@@ -141,6 +141,7 @@ namespace MyGeotabAPIAdapter
+         const string TableNameDbExceptionEvent = "ExceptionEvents";
+         const string TableNameDbFailedDVIRDefectUpdates = "FailedDVIRDefectUpdates";
+         const string TableNameDbFaultData = "FaultData";
++        const string TableNameDbGroupRelation = "GroupRelations";
+         const string TableNameDbLogRecord = "LogRecords";
+         const string TableNameDbRule = "Rules";
+         const string TableNameDbStatusData = "StatusData";
+@@ -398,6 +399,14 @@ namespace MyGeotabAPIAdapter
+             get => TableNameDbFaultData;
+         }
+ 
++        /// <summary>
++        /// The name of the database table for <see cref="GroupRelation"/> information.
++        /// </summary>
++        public static string DbGroupRelationTableName
++        {
++            get => TableNameDbGroupRelation;
++        }
++
+         /// <summary>
+         /// The name of the database table for <see cref="LogRecord"/> information.
+         /// </summary>
+diff --git a/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs b/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
+index 2d6a93f..6f70062 100644
+--- a/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
++++ b/MyGeotabAPIAdapter/DutyStatusAvailabilityWorker.cs
+@@ -175,6 +175,7 @@ namespace MyGeotabAPIAdapter
+                                             }
+                                             catch (Exception)
+                                             {
++                                                logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
+                                                 cancellationTokenSource.Cancel();
+                                                 throw;
+                                             }
+@@ -193,6 +194,7 @@ namespace MyGeotabAPIAdapter
+                                             }
+                                             catch (Exception)
+                                             {
++                                                logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
+                                                 cancellationTokenSource.Cancel();
+                                                 throw;
+                                             }
+diff --git a/MyGeotabAPIAdapter/ObjectMapper.cs b/MyGeotabAPIAdapter/ObjectMapper.cs
+index 8edabec..fca7d05 100644
+--- a/MyGeotabAPIAdapter/ObjectMapper.cs
++++ b/MyGeotabAPIAdapter/ObjectMapper.cs
+@@ -101,6 +101,30 @@ namespace MyGeotabAPIAdapter
+             return false;
+         }
+ 
++        /// <summary>
++        /// Indicates whether the <see cref="DbGroupRelation"/> differs from the <see cref="GroupRelation"/>, thereby requiring the <see cref="DbGroupRelation"/> to be updated in the database. 
++        /// </summary>
++        /// <param name="dbGroupRelation">The <see cref="DbGroupRelation"/> to be evaluated.</param>
++        /// <param name="group_relation">The <see cref="GroupRelation"/> to compare against.</param>
++        /// <returns></returns>
++        public static bool DbGroupRelationRequiresUpdate(DbGroupRelation dbGroupRelation, GroupRelation group_relation)
++        {
++            if (dbGroupRelation.GeotabId != group_relation.Id.ToString())
++            {
++                throw new ArgumentException($"Cannot compare GroupRelation '{group_relation.Id}' with DbGroupRelation '{dbGroupRelation.GeotabId}' because the IDs do not match.");
++            }
++
++            if ((dbGroupRelation.Comments != group_relation.Comments) && (dbGroupRelation.Comments != null && group_relation.Comments != ""))
++            {
++                return true;
++            }
++            if ((dbGroupRelation.Name != group_relation.Name) && (dbGroupRelation.Name != null && group_relation.Name != ""))
++            {
++                return true;
++            }
++            return false;
++        }
++
+         /// <summary>
+         /// Indicates whether the <see cref="DbRule"/> of the <see cref="DbRuleObject"/> differs from the <see cref="Rule"/>, 
+         /// thereby requiring the <see cref="DbRule"/> and related <see cref="DbCondition"/> objects to be updated in the database. 
+@@ -901,6 +925,43 @@ namespace MyGeotabAPIAdapter
+             return dbFaultDatas;
+         }
+ 
++        /// <summary>
++        /// Converts the supplied <see cref="GroupRelation"/> into a <see cref="DbGroupRelation"/>.
++        /// </summary>
++        /// <param name="">The <see cref="GroupRelation"/> to be converted.</param>
++        /// <returns></returns>
++        public static DbGroupRelation GetDbGroupRelation(GroupRelation group_relation)
++        {
++            DbGroupRelation dbGroupRelation = new()
++            {
++                GeotabId = group_relation.Id.ToString(),
++                Name = group_relation.Name,
++                Comments = group_relation.Comments,
++                Reference = group_relation.Reference,
++                ParentId = "", //group_relation.ParentId,
++                Color = "", //group_relation.Color,
++            };
++            return dbGroupRelation;
++        }
++
++        /// <summary>
++        /// Converts the supplied list of <see cref="GroupRelation"/> objects into a list of <see cref="DbGroupRelation"/> objects.
++        /// </summary>
++        /// <param name="group_relations">The list of <see cref="GroupRelation"/> objects to be converted.</param>
++        /// <returns></returns>
++        public static List<DbGroupRelation> GetDbGroupRelations(List<GroupRelation> group_relations)
++        {
++            DateTime RecordLastChangedUtc = DateTime.UtcNow;
++            var dbGroupRelations = new List<DbGroupRelation>();
++            foreach (var group_relation in group_relations)
++            {
++                DbGroupRelation dbGroupRelation = GetDbGroupRelation(group_relation);
++                dbGroupRelation.RecordLastChangedUtc = RecordLastChangedUtc;
++                dbGroupRelations.Add(dbGroupRelation);
++            }
++            return dbGroupRelations;
++        }
++
+         /// <summary>
+         /// Converts the supplied <see cref="LogRecord"/> into a <see cref="DbLogRecord"/>.
+         /// </summary>
+diff --git a/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql b/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
+index 6d294ac..e60e396 100644
+--- a/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
++++ b/MyGeotabAPIAdapter/PostgreSQL/geotabadapterdb-DatabaseCreationScript.sql
+@@ -639,6 +602,45 @@ ALTER TABLE public."FaultData_id_seq" OWNER TO geotabadapter_owner;
+ ALTER SEQUENCE public."FaultData_id_seq" OWNED BY public."FaultData".id;
+ 
+ 
++--
++-- Name: GroupRelations; Type: TABLE; Schema: public; Owner: geotabadapter_owner
++--
++
++CREATE TABLE public."GroupRelations" (
++    id bigint NOT NULL,
++    "GeotabId" character varying(50) NOT NULL,
++    "Name" character varying(255) NOT NULL,
++    "ParentId" text,
++    "Children" text,
++    "Color" text,
++    "Comments" text,
++    "Reference" character varying(255),
++    "EntityStatus" integer NOT NULL,
++    "RecordLastChangedUtc" timestamp without time zone NOT NULL
++);
++
++ALTER TABLE public."GroupRelations" OWNER TO geotabadapter_owner;
++
++--
++-- Name: GroupRelations_id_seq; Type: SEQUENCE; Schema: public; Owner: geotabadapter_owner
++--
++
++CREATE SEQUENCE public."GroupRelations_id_seq"
++    START WITH 1
++    INCREMENT BY 1
++    NO MINVALUE
++    NO MAXVALUE
++    CACHE 1;
++
++ALTER TABLE public."GroupRelations_id_seq" OWNER TO geotabadapter_owner;
++
++--
++-- Name: GroupRelations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: geotabadapter_owner
++--
++
++ALTER SEQUENCE public."GroupRelations_id_seq" OWNED BY public."GroupRelations".id;
++
++
+ --
+ -- Name: LogRecords; Type: TABLE; Schema: public; Owner: geotabadapter_owner
+ --
+@@ -1116,6 +1118,12 @@ ALTER TABLE ONLY public."FailedDVIRDefectUpdates" ALTER COLUMN id SET DEFAULT ne
+ 
+ ALTER TABLE ONLY public."FaultData" ALTER COLUMN id SET DEFAULT nextval('public."FaultData_id_seq"'::regclass);
+ 
++--
++-- Name: GroupRelations id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
++--
++
++ALTER TABLE ONLY public."GroupRelations" ALTER COLUMN id SET DEFAULT nextval('public."GroupRelations_id_seq"'::regclass);
++
+ 
+ --
+ -- Name: LogRecords id; Type: DEFAULT; Schema: public; Owner: geotabadapter_owner
+diff --git a/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql b/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
+index 7fd40fd..02f5972 100644
+--- a/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
++++ b/MyGeotabAPIAdapter/SQLServer/CleanDatabaseScript.sql
+@@ -12,6 +12,7 @@
+ -- delete from [dbo].[ExceptionEvents];
+ -- delete from [dbo].[FailedDVIRDefectUpdates];
+ -- delete from [dbo].[FaultData];
++-- delete from [dbo].[GroupRelations];
+ -- delete from [dbo].[LogRecords];
+ -- delete from [dbo].[MyGeotabVersionInfo];
+ -- delete from [dbo].[Rules];
+@@ -33,6 +34,7 @@
+ --DBCC CHECKIDENT ('dbo.ExceptionEvents', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.FailedDVIRDefectUpdates', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.FaultData', RESEED, 0);
++--DBCC CHECKIDENT ('dbo.GroupRelations', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.LogRecords', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.Rules', RESEED, 0);
+ --DBCC CHECKIDENT ('dbo.StatusData', RESEED, 0);
+@@ -69,6 +71,8 @@ select 'FailedDVIRDefectUpdates', SUM(st.row_count) FROM sys.dm_db_partition_sta
+ union all
+ select 'FaultData', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'FaultData'
+ union all
++select 'GroupRelations', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'GroupRelations'
++union all
+ select 'LogRecords', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'LogRecords'
+ union all
+ select 'MyGeotabVersionInfo', SUM(st.row_count) FROM sys.dm_db_partition_stats st WHERE object_name(object_id) = 'MyGeotabVersionInfo'
+diff --git a/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql b/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql
+index b85e250..e44552c 100644
+Binary files a/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql and b/MyGeotabAPIAdapter/SQLServer/geotabadapterdb-DatabaseCreationScript.sql differ
+diff --git a/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql b/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
+index 177143d..28f2a42 100644
+--- a/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
++++ b/MyGeotabAPIAdapter/SQLite/CleanDatabaseScript.sql
+@@ -12,6 +12,7 @@
+ --delete from "ExceptionEvents";
+ --delete from "FailedDVIRDefectUpdates";
+ --delete from "FaultData";
++--delete from "GroupRelations";
+ --delete from "LogRecords";
+ --delete from "MyGeotabVersionInfo";
+ --delete from "Rules";
+@@ -48,6 +49,8 @@ select 'FailedDVIRDefectUpdates', count(0) from "FailedDVIRDefectUpdates"
+ union all
+ select 'FaultData', count(0) from "FaultData"
+ union all
++select 'GroupRelations', count(0) from "GroupRelations"
++union all
+ select 'LogRecords', count(0) from "LogRecords"
+ union all
+ select 'MyGeotabVersionInfo', count(0) from "MyGeotabVersionInfo"
+diff --git a/MyGeotabAPIAdapter/Worker.cs b/MyGeotabAPIAdapter/Worker.cs
+index 9c2c4cd..90ebbd9 100644
+--- a/MyGeotabAPIAdapter/Worker.cs
++++ b/MyGeotabAPIAdapter/Worker.cs
+@@ -36,6 +36,7 @@ namespace MyGeotabAPIAdapter
+         IDictionary<Id, DbDiagnostic> dbDiagnosticsDictionary;
+         IDictionary<Id, DbDVIRDefect> dbDVIRDefectsDictionary;
+         IDictionary<Id, DbDVIRDefectRemark> dbDVIRDefectRemarksDictionary;
++        IDictionary<Id, DbGroupRelation> dbGroupRelationsDictionary;
+         IDictionary<Id, DbRuleObject> dbRuleObjectDictionary;
+         IDictionary<Id, DbUser> dbUsersDictionary;
+         IDictionary<Id, DbZone> dbZonesDictionary;
+@@ -682,6 +683,7 @@ namespace MyGeotabAPIAdapter
+                     var getAllDbUsersTask = DbUserService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbDVIRDefectsTask = DbDVIRDefectService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbDVIRDefectRemarksTask = DbDVIRDefectRemarkService.GetAllAsync(connectionInfo, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                    var getAllDbGroupRelationsTask = DbGroupRelationService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbRuleObjectsTask = RuleHelper.GetDatabaseRuleObjectsAsync(cancellationTokenSource);
+                     var getAllDbZonesTask = DbZoneService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+                     var getAllDbZoneTypesTask = DbZoneTypeService.GetAllAsync(connectionInfo, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
+@@ -696,6 +698,7 @@ namespace MyGeotabAPIAdapter
+                     dbUsersDictionary = getAllDbUsersTask.Result.ToDictionary(user => Id.Create(user.GeotabId));
+                     dbDVIRDefectsDictionary = getAllDbDVIRDefectsTask.Result.ToDictionary(dvirDefect => Id.Create(dvirDefect.GeotabId));
+                     dbDVIRDefectRemarksDictionary = getAllDbDVIRDefectRemarksTask.Result.ToDictionary(dvirDefectRemark => Id.Create(dvirDefectRemark.GeotabId));
++                    dbGroupRelationsDictionary = getAllDbGroupRelationsTask.Result.ToDictionary(dbGroupRelation => Id.Create(dbGroupRelation.GeotabId));
+                     dbRuleObjectDictionary = getAllDbRuleObjectsTask.Result.ToDictionary(dbRuleObject => Id.Create(dbRuleObject.GeotabId));
+                     dbZonesDictionary = getAllDbZonesTask.Result.ToDictionary(dbZone => Id.Create(dbZone.GeotabId));
+                     dbZoneTypesDictionary = getAllDbZoneTypesTask.Result.ToDictionary(dbZoneType => Id.Create(dbZoneType.GeotabId));
+@@ -1532,6 +1535,142 @@ namespace MyGeotabAPIAdapter
+ 
+             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+         }
++
++        /// <summary>
++        /// Propagates <see cref="GroupRelation"/> information received from MyGeotab to the database - inserting new records, updating existing records (if the values of any of the utilized fields have changed), and marking as deleted any database group_relation records that no longer exist in MyGeotab (based on matching on ID). 
++        /// </summary>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <returns></returns>
++        async Task PropagateGroupRelationCacheUpdatesToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
++        {
++            MethodBase methodBase = MethodBase.GetCurrentMethod();
++            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
++
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++
++            // Only propagate the cache to database if the cache has been updated since the last time it was propagated to database.
++            if (CacheManager.GroupRelationCacheContainer.LastUpdatedTimeUtc > CacheManager.GroupRelationCacheContainer.LastPropagatedToDatabaseTimeUtc)
++            {
++                DateTime recordChangedTimestampUtc = DateTime.UtcNow;
++                var dbGroupRelationsToInsert = new List<DbGroupRelation>();
++                var dbGroupRelationsToUpdate = new List<DbGroupRelation>();
++
++                // Get cached group_relations.
++                var group_relationCache = (Dictionary<Id, GroupRelation>)CacheManager.GroupRelationCacheContainer.Cache;
++
++                // Find any group_relations that have been deleted in MyGeotab but exist in the database and have not yet been flagged as deleted. Update them so that they will be flagged as deleted in the database.
++                if (dbGroupRelationsDictionary.Any())
++                {
++                    foreach (DbGroupRelation dbGroupRelation in dbGroupRelationsDictionary.Values.ToList())
++                    {
++                        if (dbGroupRelation.EntityStatus == (int)Common.DatabaseRecordStatus.Active)
++                        {
++                            bool group_relationExistsInCache = group_relationCache.ContainsKey(Id.Create(dbGroupRelation.GeotabId));
++                            if (!group_relationExistsInCache)
++                            {
++                                logger.Info($"GroupRelation '{dbGroupRelation.GeotabId}' no longer exists in MyGeotab and is being marked as deleted.");
++                                dbGroupRelation.EntityStatus = (int)Common.DatabaseRecordStatus.Deleted;
++                                dbGroupRelation.RecordLastChangedUtc = recordChangedTimestampUtc;
++                                dbGroupRelation.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
++                                dbGroupRelationsDictionary[Id.Create(dbGroupRelation.GeotabId)] = dbGroupRelation;
++                                dbGroupRelationsToUpdate.Add(dbGroupRelation);
++                            }
++                        }
++                    }
++                }
++                else
++                {
++                    logger.Info($"GroupRelation cache in database requires no deletes.");
++                }
++
++                // Iterate through cached group_relations.
++                foreach (GroupRelation cachedGroupRelation in group_relationCache.Values.ToList())
++                {
++                    // Try to find the existing database record for the cached group_relation.
++                    if (dbGroupRelationsDictionary.TryGetValue(cachedGroupRelation.Id, out var existingDbGroupRelation))
++                    {
++                        // The group_relation has already been added to the database.
++                        bool dbGroupRelationRequiresUpdate = ObjectMapper.DbGroupRelationRequiresUpdate(existingDbGroupRelation, cachedGroupRelation);
++                        if (dbGroupRelationRequiresUpdate)
++                        {
++                            //logger.Info($"Updating GroupRelation '{cachedGroupRelation.Name}' in the database.");
++                            DbGroupRelation updatedDbGroupRelation = ObjectMapper.GetDbGroupRelation(cachedGroupRelation);
++                            updatedDbGroupRelation.id = existingDbGroupRelation.id;
++                            updatedDbGroupRelation.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
++                            updatedDbGroupRelation.RecordLastChangedUtc = recordChangedTimestampUtc;
++                            updatedDbGroupRelation.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Update;
++                            dbGroupRelationsDictionary[Id.Create(updatedDbGroupRelation.GeotabId)] = updatedDbGroupRelation;
++                            dbGroupRelationsToUpdate.Add(updatedDbGroupRelation);
++                        }
++                        /*
++                        else
++                        {
++                            logger.Info($"GroupRelation cache has not been added to the database.");
++                        }
++                        */
++                    }
++                    else
++                    {
++                        // The group_relation has not yet been added to the database. Create a DbGroupRelation, set its properties and add it to the cache.
++                        logger.Info($"Marking GroupRelation '{cachedGroupRelation.Name}' to be added to the database.");
++                        DbGroupRelation newDbGroupRelation = ObjectMapper.GetDbGroupRelation(cachedGroupRelation);
++                        newDbGroupRelation.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
++                        newDbGroupRelation.RecordLastChangedUtc = recordChangedTimestampUtc;
++                        newDbGroupRelation.DatabaseWriteOperationType = Common.DatabaseWriteOperationType.Insert;
++                        dbGroupRelationsDictionary.Add(Id.Create(newDbGroupRelation.GeotabId), newDbGroupRelation);
++                        dbGroupRelationsToInsert.Add(newDbGroupRelation);
++
++                    }
++                }
++
++                cancellationToken.ThrowIfCancellationRequested();
++
++                // Send any inserts to the database.
++                if (dbGroupRelationsToInsert.Any())
++                {
++                    try
++                    {
++                        DateTime startTimeUTC = DateTime.UtcNow;
++                        long group_relationEntitiesInserted = await DbGroupRelationService.InsertAsync(connectionInfo, dbGroupRelationsToInsert, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
++                        double recordsProcessedPerSecond = (double)group_relationEntitiesInserted / (double)elapsedTime.TotalSeconds;
++                        logger.Info($"Completed insertion of {group_relationEntitiesInserted} records into {ConfigurationManager.DbGroupRelationTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
++                    }
++                    catch (Exception)
++                    {
++                        logger.Info($"Database insertion failed to insert records into the {ConfigurationManager.DbGroupRelationTableName} table.");
++                        cancellationTokenSource.Cancel();
++                        throw;
++                    }
++                }
++
++                // Send any updates/deletes to the database.
++                if (dbGroupRelationsToUpdate.Any())
++                {
++                    try
++                    {
++                        DateTime startTimeUTC = DateTime.UtcNow;
++                        long group_relationEntitiesUpdated = await DbGroupRelationService.UpdateAsync(connectionInfo, dbGroupRelationsToUpdate, cancellationTokenSource, Globals.ConfigurationManager.TimeoutSecondsForDatabaseTasks);
++                        TimeSpan elapsedTime = DateTime.UtcNow.Subtract(startTimeUTC);
++                        double recordsProcessedPerSecond = (double)group_relationEntitiesUpdated / (double)elapsedTime.TotalSeconds;
++                        logger.Info($"Completed updating of {group_relationEntitiesUpdated} records in {ConfigurationManager.DbGroupRelationTableName} table in {elapsedTime.TotalSeconds} seconds ({recordsProcessedPerSecond} per second throughput).");
++                    }
++                    catch (Exception)
++                    {
++                        logger.Info($"Database update failed for the {ConfigurationManager.DbDutyStatusAvailabilityTableName} table.");
++                        cancellationTokenSource.Cancel();
++                        throw;
++                    }
++                }
++                CacheManager.GroupRelationCacheContainer.LastPropagatedToDatabaseTimeUtc = DateTime.UtcNow;
++            }
++            else
++            {
++                logger.Info($"GroupRelation cache in database is up-to-date.");
++            }
++
++            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
++        }
+ 
+         /// <summary>
+         /// Propagates <see cref="Geotab.Checkmate.ObjectModel.Exceptions.Rule"/> information received from MyGeotab to the database - inserting new records, updating existing records (if the values of any of the utilized fields have changed), and marking as deleted any database device records that no longer exist in MyGeotab (based on matching on ID). 
+@@ -2164,6 +2303,7 @@ namespace MyGeotabAPIAdapter
+                 {
+                     var updateUserCacheAndPersistToDatabaseAsyncTask = UpdateUserCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateDeviceCacheAndPersistToDatabaseAsyncTask = UpdateDeviceCacheAndPersistToDatabaseAsync(cancellationTokenSource);
++                    var updateGroupRelationCacheAndPersistToDatabaseAsyncTask = UpdateGroupRelationCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateZoneTypeCacheAndPersistToDatabaseAsyncTask = UpdateZoneTypeCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateZoneCacheAndPersistToDatabaseAsyncTask = UpdateZoneCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     var updateDiagnosticCacheAndPersistToDatabaseAsyncTask = UpdateDiagnosticCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+@@ -2173,9 +2311,9 @@ namespace MyGeotabAPIAdapter
+                     var updateRuleCacheAndPersistToDatabaseAsyncTask = UpdateRuleCacheAndPersistToDatabaseAsync(cancellationTokenSource);
+                     //var updateGroupRelationCacheAsyncTask = UpdateGroupRelationCacheAsync(cancellationTokenSource);
+ 
+-                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask };
++                    Task[] tasks = { updateUserCacheAndPersistToDatabaseAsyncTask, updateDeviceCacheAndPersistToDatabaseAsyncTask, updateGroupCacheAndPersistToDatabaseAsyncTask, updateGroupRelationCacheAndPersistToDatabaseAsyncTask, updateZoneTypeCacheAndPersistToDatabaseAsyncTask, updateZoneCacheAndPersistToDatabaseAsyncTask, updateDiagnosticCacheAndPersistToDatabaseAsyncTask, updateControllerCacheAsyncTask, updateFailureModeCacheAsyncTask, updateUnitOfMeasureCacheAsyncTask, updateRuleCacheAndPersistToDatabaseAsyncTask };
+ 
+                     try
+                     {
+@@ -2285,6 +2425,25 @@ namespace MyGeotabAPIAdapter
+             logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
+         }
+ 
++        /// <summary>
++        /// Updates the <see cref="GroupRelation"/> cache and persists cache updates to the database.
++        /// </summary>
++        /// <param name="cancellationTokenSource">The <see cref="CancellationTokenSource"/>.</param>
++        /// <returns></returns>
++        async Task UpdateGroupRelationCacheAndPersistToDatabaseAsync(CancellationTokenSource cancellationTokenSource)
++        {
++            MethodBase methodBase = MethodBase.GetCurrentMethod();
++            logger.Trace($"Begin {methodBase.ReflectedType.Name}.{methodBase.Name}");
++
++            CancellationToken cancellationToken = cancellationTokenSource.Token;
++
++            await CacheManager.UpdateCacheAsync<GroupRelation>(cancellationTokenSource, CacheManager.GroupRelationCacheContainer, Globals.ConfigurationManager.GroupRelationCacheIntervalDailyReferenceStartTimeUTC, Globals.ConfigurationManager.GroupRelationCacheUpdateIntervalMinutes, Globals.ConfigurationManager.GroupRelationCacheRefreshIntervalMinutes, false);
++            cancellationToken.ThrowIfCancellationRequested();
++            await PropagateGroupRelationCacheUpdatesToDatabaseAsync(cancellationTokenSource);
++
++            logger.Trace($"End {methodBase.ReflectedType.Name}.{methodBase.Name}");
++        }
++
+         /// <summary>
+         /// Updates the <see cref="Geotab.Checkmate.ObjectModel.Exceptions.Rule"/> cache and persists cache updates to the database.
+         /// </summary>
+\ No newline at end of file

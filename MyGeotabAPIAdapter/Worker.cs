@@ -1578,10 +1578,6 @@ namespace MyGeotabAPIAdapter
                         }
                     }
                 }
-                else
-                {
-                    logger.Info($"Group cache in database requires no deletes.");
-                }
 
                 // Iterate through cached groups.
                 foreach (Group cachedGroup in groupCache.Values.ToList())
@@ -1602,17 +1598,10 @@ namespace MyGeotabAPIAdapter
                             dbGroupsDictionary[Id.Create(updatedDbGroup.GeotabId)] = updatedDbGroup;
                             dbGroupsToUpdate.Add(updatedDbGroup);
                         }
-                        /*
-                        else
-                        {
-                            logger.Info($"Group cache has not been added to the database.");
-                        }
-                        */
                     }
                     else
                     {
                         // The group has not yet been added to the database. Create a DbGroup, set its properties and add it to the cache.
-                        logger.Info($"Marking Group '{cachedGroup.Name}' to be added to the database.");
                         DbGroup newDbGroup = ObjectMapper.GetDbGroup(cachedGroup);
                         newDbGroup.EntityStatus = (int)Common.DatabaseRecordStatus.Active;
                         newDbGroup.RecordLastChangedUtc = recordChangedTimestampUtc;
